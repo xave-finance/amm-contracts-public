@@ -89,7 +89,7 @@ contract RebalanceAddLiq is ReentrancyGuard {
     function viewSwapAddLiq(
         address fxPoolAddr,
         uint256 addLiqNumeraire18e,
-        uint256 slippage // slippage in 1e4 units (eg. 0.01% = 1e4)
+        uint256 slippage // slippage in 1e4 units (eg. pass a value of 100 for a slippage of 1%)
     )
         external
         returns (
