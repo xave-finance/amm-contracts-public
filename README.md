@@ -22,6 +22,11 @@ forge test
 Running code coverage reports:
 
 ```sh
+
+# note that the SizeTest.t.sol will fail during coverage
+# that's because the instrumentation that the coverage
+# adds to the code expands the size of the FXPool contract
+# making it exceed the 24KB limit
 forge coverage
 
 # or you can output an LCOV format report that can
