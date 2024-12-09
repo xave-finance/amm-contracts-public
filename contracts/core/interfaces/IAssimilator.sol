@@ -13,9 +13,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.3;
+pragma solidity ^0.8.24;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IOracle} from "./IOracle.sol";
 
 interface IAssimilator {
+    function initialize(
+        IERC20 _baseToken,
+        IERC20 _quoteToken,
+        IOracle _oracle
+    ) external;
+
     function getRate() external view returns (uint256);
 
     function viewRawAmount(int128) external view returns (uint256);
@@ -26,7 +35,7 @@ interface IAssimilator {
         // address,
         int128,
         address,
-        bytes32
+        address
     ) external view returns (uint256);
 
     function viewNumeraireAmount(uint256) external view returns (int128);
@@ -36,26 +45,29 @@ interface IAssimilator {
         uint256,
         // address,
         address,
-        bytes32
+        address
     ) external view returns (int128);
 
-    function viewNumeraireBalance(address, bytes32) external view returns (int128);
+    function viewNumeraireBalance(
+        address,
+        address
+    ) external view returns (int128);
 
     function virtualViewNumeraireBalanceIntake(
         address,
-        bytes32,
+        address,
         uint256
     ) external view returns (int128);
 
     function virtualViewNumeraireBalanceOutput(
         address,
-        bytes32,
+        address,
         uint256
     ) external view returns (int128);
 
     function viewNumeraireAmountAndBalance(
         uint256,
         address,
-        bytes32
+        address
     ) external view returns (int128, int128);
 }

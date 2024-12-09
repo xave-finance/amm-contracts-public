@@ -13,7 +13,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.3;
+pragma solidity ^0.8.24;
 
 interface IOracle {
     function acceptOwnership() external;
@@ -30,7 +30,9 @@ interface IOracle {
 
     function getAnswer(uint256 _roundId) external view returns (int256);
 
-    function getRoundData(uint80 _roundId)
+    function getRoundData(
+        uint80 _roundId
+    )
         external
         view
         returns (
@@ -70,7 +72,9 @@ interface IOracle {
 
     function proposedAggregator() external view returns (address);
 
-    function proposedGetRoundData(uint80 _roundId)
+    function proposedGetRoundData(
+        uint80 _roundId
+    )
         external
         view
         returns (

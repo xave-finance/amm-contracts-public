@@ -1,4 +1,4 @@
 {
-    "solidity.compileUsingRemoteVersion": "v0.7.3+commit.f4a555bedca",
+    "solidity.compileUsingRemoteVersion": "v0.8.28+commit.7893614a",
     "solidity.defaultCompiler": "localNodeModule"
 }

@@ -13,12 +13,12 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.3;
+pragma solidity ^0.8.24;
 
-import '@openzeppelin/contracts/utils/Address.sol';
-import './interfaces/IAssimilator.sol';
-import './lib/ABDKMath64x64.sol';
-import './Storage.sol';
+import "@openzeppelin/contracts/utils/Address.sol";
+import "./interfaces/IAssimilator.sol";
+import "./lib/ABDKMath64x64.sol";
+import "./Storage.sol";
 
 library Assimilators {
     using ABDKMath64x64 for int128;
@@ -26,27 +26,14 @@ library Assimilators {
 
     IAssimilator public constant iAsmltr = IAssimilator(address(0));
 
-    function delegate(address _callee, bytes memory _data) internal returns (bytes memory) {
-        require(_callee.isContract(), 'Assimilators/callee-is-not-a-contract');
-
-        // solhint-disable-next-line
-        (bool _success, bytes memory returnData_) = _callee.delegatecall(_data);
-
-        // solhint-disable-next-line
-        assembly {
-            if eq(_success, 0) {
-                revert(add(returnData_, 0x20), returndatasize())
-            }
-        }
-
-        return returnData_;
-    }
-
     function getRate(address _assim) internal view returns (uint256 amount_) {
         amount_ = IAssimilator(_assim).getRate();
     }
 
-    function viewRawAmount(address _assim, int128 _amt) internal view returns (uint256 amount_) {
+    function viewRawAmount(
+        address _assim,
+        int128 _amt
+    ) internal view returns (uint256 amount_) {
         amount_ = IAssimilator(_assim).viewRawAmount(_amt);
     }
 
@@ -57,7 +44,7 @@ library Assimilators {
         int128 _amount,
         // Storage.Curve storage curve
         address vault,
-        bytes32 poolId
+        address pool
     ) internal view returns (uint256 amount_) {
         amount_ = IAssimilator(_assim).viewRawAmountLPRatio(
             _baseWeight,
@@ -66,11 +53,14 @@ library Assimilators {
             // curve.weights[1].mulu(1e18),
             _amount,
             vault,
-            poolId
+            pool
         );
     }
 
-    function viewNumeraireAmount(address _assim, uint256 _amt) internal view returns (int128 amt_) {
+    function viewNumeraireAmount(
+        address _assim,
+        uint256 _amt
+    ) internal view returns (int128 amt_) {
         amt_ = IAssimilator(_assim).viewNumeraireAmount(_amt);
     }
 
@@ -78,35 +68,47 @@ library Assimilators {
         address _assim,
         uint256 _amt,
         address vault,
-        bytes32 poolId
+        address pool
     ) internal view returns (int128 amt_, int128 bal_) {
-        (amt_, bal_) = IAssimilator(_assim).viewNumeraireAmountAndBalance(_amt, vault, poolId);
+        (amt_, bal_) = IAssimilator(_assim).viewNumeraireAmountAndBalance(
+            _amt,
+            vault,
+            pool
+        );
     }
 
     function viewNumeraireBalance(
         address _assim,
         address vault,
-        bytes32 poolId
+        address pool
     ) internal view returns (int128 bal_) {
-        bal_ = IAssimilator(_assim).viewNumeraireBalance(vault, poolId);
+        bal_ = IAssimilator(_assim).viewNumeraireBalance(vault, pool);
     }
 
     function virtualViewNumeraireBalanceIntake(
         address _assim,
         address vault,
-        bytes32 poolId,
+        address pool,
         uint256 intakeAmount
     ) internal view returns (int128 bal_) {
-        bal_ = IAssimilator(_assim).virtualViewNumeraireBalanceIntake(vault, poolId, intakeAmount);
+        bal_ = IAssimilator(_assim).virtualViewNumeraireBalanceIntake(
+            vault,
+            pool,
+            intakeAmount
+        );
     }
 
     function virtualViewNumeraireBalanceOutput(
         address _assim,
         address vault,
-        bytes32 poolId,
+        address pool,
         uint256 outputAmount
     ) internal view returns (int128 bal_) {
-        bal_ = IAssimilator(_assim).virtualViewNumeraireBalanceOutput(vault, poolId, outputAmount);
+        bal_ = IAssimilator(_assim).virtualViewNumeraireBalanceOutput(
+            vault,
+            pool,
+            outputAmount
+        );
     }
 
     function viewNumeraireBalanceLPRatio(
@@ -114,14 +116,14 @@ library Assimilators {
         uint256 _quoteWeight,
         address _assim,
         address vault,
-        bytes32 poolId
+        address pool
     ) internal view returns (int128 bal_) {
         bal_ = IAssimilator(_assim).viewNumeraireBalanceLPRatio(
             _baseWeight,
             _quoteWeight,
             // address(this),
             vault,
-            poolId
+            pool
         );
     }
 }

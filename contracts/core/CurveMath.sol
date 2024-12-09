@@ -13,35 +13,43 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-pragma solidity ^0.7.3;
+pragma solidity ^0.8.24;
 
-import './Storage.sol';
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ABDKMath64x64} from "./lib/ABDKMath64x64.sol";
+import {_require, _revert, Errs} from "./lib/FXPoolErrors.sol";
 
-import './lib/UnsafeMath64x64.sol';
-import './lib/ABDKMath64x64.sol';
+
+
+struct CurveMathTradeParams {
+    int128 alpha; // Maximum weight deviation allowed
+    int128 beta; // No-fee zone width
+    int128 delta; // Fee growth rate
+    int128 lambda; // Dynamic fee proportion
+    int128 oGLiq; // Original gross liquidity
+    int128 nGLiq; // New gross liquidity
+    int128[] oBals; // Original balances
+    int128[] nBals; // New balances
+    int128[] weights; // Target weights
+    int128 inputAmt; // Trade input amount
+    uint256 outputIndex; // Index of output token
+}
 
 library CurveMath {
+    // 1.0 in 64.64 fixed point
     int128 private constant ONE = 0x10000000000000000;
-    int128 private constant MAX = 0x4000000000000000; // .25 in layman's terms
-    int128 private constant MAX_DIFF = -0x10C6F7A0B5EE;
+
+    // Maximum fee of 0.25 (25%) in 64.64
+    int128 private constant MAX = 0x4000000000000000;
+
+    // Acceptable numerical deviation for utility changes
+    int128 private constant MAX_DIFF = -0x10C6F7A0B5EE; // Approximately -1e-5
+
+    // Minimal amount for numerical stability
     int128 private constant ONE_WEI = 0x12;
 
     using ABDKMath64x64 for int128;
-    using UnsafeMath64x64 for int128;
     using ABDKMath64x64 for uint256;
-
-    // This is used to prevent stack too deep errors
-    function calculateFee(
-        int128 _gLiq,
-        int128[] memory _bals,
-        Storage.Curve storage curve,
-        int128[] memory _weights
-    ) internal view returns (int128 psi_) {
-        int128 _beta = curve.beta;
-        int128 _delta = curve.delta;
-
-        psi_ = calculateFee(_gLiq, _bals, _beta, _delta, _weights);
-    }
 
     function calculateFee(
         int128 _gLiq,
@@ -51,143 +59,111 @@ library CurveMath {
         int128[] memory _weights
     ) internal pure returns (int128 psi_) {
         uint256 _length = _bals.length;
-
+        // Sum micro fees (fᵢ) for each token in the pool
         for (uint256 i = 0; i < _length; i++) {
+            // Calculate ideal balance for token i: Iᵢ = G · wᵢ
             int128 _ideal = _gLiq.mul(_weights[i]);
-            psi_ += calculateMicroFee(_bals[i], _ideal, _beta, _delta);
+            // Add micro fee for this token to total fee
+            psi_ += calculateDynamicFee(_bals[i], _ideal, _beta, _delta);
         }
     }
 
-    function calculateMicroFee(
+    function calculateDynamicFee(
         int128 _bal,
         int128 _ideal,
         int128 _beta,
         int128 _delta
-    ) private pure returns (int128 fee_) {
+    ) internal pure returns (int128 fee_) {
+        // Case 1: Balance below ideal
         if (_bal < _ideal) {
-            int128 _threshold = _ideal.mul(ONE - _beta);
-
-            if (_bal < _threshold) {
-                int128 _feeMargin = _threshold - _bal;
-
-                fee_ = _feeMargin.div(_ideal);
-                fee_ = fee_.mul(_delta);
-
+            // Calculate lower bound of no-fee zone
+            int128 _lowerBeta = _ideal.mul(ONE - _beta);
+            // If balance below no-fee zone, calculate quadratic fee
+            if (_bal < _lowerBeta) {
+                // Distance from lower bound of no-fee zone
+                int128 _feeMargin = _lowerBeta - _bal;
+                // Initial fee proportional to deviation
+                fee_ = _feeMargin.mul(_delta).div(_ideal);
+                // Cap fee at 25% (0x4000000000000000 in 64.64)
                 if (fee_ > MAX) fee_ = MAX;
-
+                // Final fee grows quadratically with deviation
                 fee_ = fee_.mul(_feeMargin);
-            } else fee_ = 0;
+            } else {
+                fee_ = 0; // Within no-fee zone
+            }
         } else {
-            int128 _threshold = _ideal.mul(ONE + _beta);
-
-            if (_bal > _threshold) {
-                int128 _feeMargin = _bal - _threshold;
-
-                fee_ = _feeMargin.div(_ideal);
-                fee_ = fee_.mul(_delta);
-
+            // Case 2: Balance above ideal
+            // Calculate upper bound of no-fee zone
+            int128 _upperBeta = _ideal.mul(ONE + _beta);
+            // If balance above no-fee zone, calculate quadratic fee
+            if (_bal > _upperBeta) {
+                int128 _feeMargin = _bal - _upperBeta;
+                fee_ = _feeMargin.mul(_delta).div(_ideal);
                 if (fee_ > MAX) fee_ = MAX;
-
                 fee_ = fee_.mul(_feeMargin);
-            } else fee_ = 0;
+            } else {
+                fee_ = 0; // Within no-fee zone
+            }
         }
     }
 
     function calculateTrade(
-        Storage.Curve storage curve,
-        int128 _oGLiq,
-        int128 _nGLiq,
-        int128[] memory _oBals,
-        int128[] memory _nBals,
-        int128 _inputAmt,
-        uint256 _outputIndex
-    ) internal view returns (int128 outputAmt_) {
-        outputAmt_ = -_inputAmt;
+        CurveMathTradeParams memory p
+    ) internal pure returns (int128 outputAmt_) {
+        // Initialize output amount as negative of input amount
+        outputAmt_ = -p.inputAmt;
+        // Calculate original state fee (ω in whitepaper)
+        int128 _omega = calculateFee(
+            p.oGLiq,
+            p.oBals,
+            p.beta,
+            p.delta,
+            p.weights
+        );
 
-        // int128 _lambda = curve.lambda;
-        int128[] memory _weights = curve.weights;
-
-        int128 _omega = calculateFee(_oGLiq, _oBals, curve, _weights);
-
-        int128 _psi;
-
+        // Iterate to find output amount that preserves invariants
         for (uint256 i = 0; i < 32; i++) {
-            {
-                _psi = calculateFee(_nGLiq, _nBals, curve, _weights);
-            }
+            // Calculate new state fee (ψ in whitepaper)
+            int128 _psi = calculateFee(
+                p.nGLiq,
+                p.nBals,
+                p.beta,
+                p.delta,
+                p.weights
+            );
 
-            int128 prevAmount;
-            {
-                prevAmount = outputAmt_;
+            int128 prevAmount = outputAmt_;
+            // Adjust output amount based on fee differential
+            // if omega < psi, we are moving towards a less balanced state
+            outputAmt_ = _omega < _psi
+                ? -(p.inputAmt + (_omega - _psi))
+                : -(p.inputAmt + (p.lambda).mul(_omega - _psi));
 
-                outputAmt_ = _omega < _psi
-                    ? -(_inputAmt + (_omega - _psi))
-                    : -(_inputAmt + (curve.lambda).mul(_omega - _psi));
-            }
-
+            // Check for convergence (within 1e-13 precision)
             if (outputAmt_ / 1e13 == prevAmount / 1e13) {
-                _nGLiq = _oGLiq + _inputAmt + outputAmt_;
-
-                _nBals[_outputIndex] = _oBals[_outputIndex] + outputAmt_;
-
-                enforceHalts(curve, _oGLiq, _nGLiq, _oBals, _nBals, _weights);
-
-                enforceSwapInvariant(_oGLiq, _omega, _nGLiq, _psi);
+                // Update final state
+                p.nGLiq = p.oGLiq + p.inputAmt + outputAmt_;
+                p.nBals[p.outputIndex] = p.oBals[p.outputIndex] + outputAmt_;
+                // Verify trade satisfies invariants
+                enforceHalts(
+                    p.alpha,
+                    p.oGLiq,
+                    p.nGLiq,
+                    p.oBals,
+                    p.nBals,
+                    p.weights
+                );
+                enforceSwapInvariant(p.oGLiq, _omega, p.nGLiq, _psi);
 
                 return outputAmt_;
             } else {
-                _nGLiq = _oGLiq + _inputAmt + outputAmt_;
-
-                _nBals[_outputIndex] = _oBals[_outputIndex].add(outputAmt_);
+                // Update state for next iteration
+                p.nGLiq = p.oGLiq + p.inputAmt + outputAmt_;
+                p.nBals[p.outputIndex] = p.oBals[p.outputIndex].add(outputAmt_);
             }
         }
-
-        revert('CurveMath/swap-convergence-failed');
-    }
-
-    function calculateLiquidityMembrane(
-        Storage.Curve storage curve,
-        int128 _oGLiq,
-        int128 _nGLiq,
-        int128[] memory _oBals,
-        int128[] memory _nBals
-    ) internal view returns (int128 curves_) {
-        enforceHalts(curve, _oGLiq, _nGLiq, _oBals, _nBals, curve.weights);
-
-        int128 _omega;
-        int128 _psi;
-
-        {
-            int128 _beta = curve.beta;
-            int128 _delta = curve.delta;
-            int128[] memory _weights = curve.weights;
-
-            _omega = calculateFee(_oGLiq, _oBals, _beta, _delta, _weights);
-            _psi = calculateFee(_nGLiq, _nBals, _beta, _delta, _weights);
-        }
-
-        int128 _feeDiff = _psi.sub(_omega);
-        int128 _liqDiff = _nGLiq.sub(_oGLiq);
-        int128 _oUtil = _oGLiq.sub(_omega);
-
-        int128 _totalShells = IERC20(curve.fxPoolAddress).totalSupply().divu(1e18);
-        int128 _curveMultiplier;
-
-        if (_totalShells == 0) {
-            curves_ = _nGLiq.sub(_psi);
-        } else if (_feeDiff >= 0) {
-            _curveMultiplier = _liqDiff.sub(_feeDiff).div(_oUtil);
-        } else {
-            _curveMultiplier = _liqDiff.sub(curve.lambda.mul(_feeDiff));
-
-            _curveMultiplier = _curveMultiplier.div(_oUtil);
-        }
-
-        if (_totalShells != 0) {
-            curves_ = _totalShells.mul(_curveMultiplier);
-
-            enforceLiquidityInvariant(_totalShells, curves_, _oGLiq, _nGLiq, _omega, _psi);
-        }
+        // If convergence not reached, revert
+        _revert(Errs.FP_SWAP_CONVERGENCE_VIOLATION);
     }
 
     function enforceSwapInvariant(
@@ -196,13 +172,18 @@ library CurveMath {
         int128 _nGLiq,
         int128 _psi
     ) private pure {
+        // Calculate utility change: (new utility - old utility)
+        // Where utility U(x) = G(x) - F(x) = gross liquidity - fees
         int128 _nextUtil = _nGLiq - _psi;
-
         int128 _prevUtil = _oGLiq - _omega;
-
         int128 _diff = _nextUtil - _prevUtil;
 
-        require(0 < _diff || _diff >= MAX_DIFF, 'CurveMath/swap-invariant-violation');
+        // Ensure utility either increases or doesn't decrease beyond acceptable threshold
+        // MAX_DIFF (approximately -1e-5) provides numerical tolerance for floating point operations
+        _require(
+            0 < _diff || _diff >= MAX_DIFF,
+            Errs.FP_SWAP_INVARIANT_VIOLATION
+        );
     }
 
     function enforceLiquidityInvariant(
@@ -213,60 +194,68 @@ library CurveMath {
         int128 _omega,
         int128 _psi
     ) internal pure {
+        // Skip check if no shells exist or will exist after operation
         if (_totalShells == 0 || 0 == _totalShells + _newShells) return;
 
+        // Calculate utility per shell before and after operation
         int128 _prevUtilPerShell = _oGLiq.sub(_omega).div(_totalShells);
+        int128 _nextUtilPerShell = _nGLiq.sub(_psi).div(
+            _totalShells.add(_newShells)
+        );
 
-        int128 _nextUtilPerShell = _nGLiq.sub(_psi).div(_totalShells.add(_newShells));
-
+        // Verify utility per shell doesn't decrease beyond acceptable threshold
         int128 _diff = _nextUtilPerShell - _prevUtilPerShell;
-
-        require(0 < _diff || _diff >= MAX_DIFF, 'CurveMath/liquidity-invariant-violation');
+        _require(
+            0 < _diff || _diff >= MAX_DIFF,
+            Errs.FP_CURVE_LIQUIDITY_VIOLATION
+        );
     }
 
     function enforceHalts(
-        Storage.Curve storage curve,
+        int128 _alpha,
         int128 _oGLiq,
         int128 _nGLiq,
         int128[] memory _oBals,
         int128[] memory _nBals,
         int128[] memory _weights
-    ) private view {
+    ) private pure {
         uint256 _length = _nBals.length;
-        int128 _alpha = curve.alpha;
-
         for (uint256 i = 0; i < _length; i++) {
+            // Calculate new ideal balance for token i: Iᵢ = G * wᵢ
             int128 _nIdeal = _nGLiq.mul(_weights[i]);
 
             if (_nBals[i] > _nIdeal) {
+                // Check upper halt threshold
                 int128 _upperAlpha = ONE + _alpha;
-
                 int128 _nHalt = _nIdeal.mul(_upperAlpha);
 
                 if (_nBals[i] > _nHalt) {
+                    // Calculate original halt threshold
                     int128 _oHalt = _oGLiq.mul(_weights[i]).mul(_upperAlpha);
 
+                    // Ensure we don't cross halt threshold
                     if (_oBals[i] < _oHalt) {
-                        revert('CurveMath/upper-halt');
+                        _revert(Errs.FP_UPPER_HALT);
                     }
                     if (_nBals[i] - _nHalt > _oBals[i] - _oHalt) {
-                        revert('CurveMath/upper-halt');
+                        _revert(Errs.FP_UPPER_HALT);
                     }
                 }
             } else {
+                // Check lower halt threshold
                 int128 _lowerAlpha = ONE - _alpha;
-
                 int128 _nHalt = _nIdeal.mul(_lowerAlpha);
 
                 if (_nBals[i] < _nHalt) {
                     int128 _oHalt = _oGLiq.mul(_weights[i]);
                     _oHalt = _oHalt.mul(_lowerAlpha);
 
+                    // Ensure we don't cross halt threshold
                     if (_oBals[i] > _oHalt) {
-                        revert('CurveMath/lower-halt');
+                        _revert(Errs.FP_LOWER_HALT);
                     }
                     if (_nHalt - _nBals[i] > _oHalt - _oBals[i]) {
-                        revert('CurveMath/lower-halt');
+                        _revert(Errs.FP_LOWER_HALT);
                     }
                 }
             }

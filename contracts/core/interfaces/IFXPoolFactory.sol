@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0-or-later
+// SPDX-License-Identifier: MIT
+
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
@@ -14,6 +15,15 @@
 
 pragma solidity ^0.8.24;
 
-interface IAsset {
-    // solhint-disable-previous-line no-empty-blocks
+import {NewPoolParams} from "./../FXPoolTypes.sol";
+import {
+    IPoolVersion
+} from "@balancer-labs/v3-interfaces/contracts/solidity-utils/helpers/IPoolVersion.sol";
+
+interface IFXPoolFactory is IPoolVersion {
+    function create(
+        NewPoolParams memory _newFxPoolParams,
+        address _baseOracle,
+        address _quoteOracle
+    ) external returns (address pool);
 }

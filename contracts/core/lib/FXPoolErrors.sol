@@ -1,33 +1,17 @@
-pragma solidity 0.7.6;
+pragma solidity ^0.8.24;
 
-/**
- * @dev Reverts if `condition` is false, with a revert reason containing `errorCode`. Only codes up to 999 are
- * supported.
- * Uses the default 'FXP' prefix for the error code
- */
 function _require(bool condition, uint256 errorCode) pure {
     if (!condition) _revert(errorCode);
 }
 
-/**
- * @dev Reverts if `condition` is false, with a revert reason containing `errorCode`. Only codes up to 999 are
- * supported.
- */
 function _require(bool condition, uint256 errorCode, bytes3 prefix) pure {
     if (!condition) _revert(errorCode, prefix);
 }
 
-/**
- * @dev Reverts with a revert reason containing `errorCode`. Only codes up to 999 are supported.
- * Uses the default 'FXP' prefix for the error code
- */
 function _revert(uint256 errorCode) pure {
     _revert(errorCode, 0x465850); // This is the raw byte representation of "FXP"
 }
 
-/**
- * @dev Reverts with a revert reason containing `errorCode`. Only codes up to 999 are supported.
- */
 function _revert(uint256 errorCode, bytes3 prefix) pure {
     uint256 prefixUint = uint256(uint24(prefix));
     // We're going to dynamically create a revert string based on the error code, with the following format:
@@ -62,7 +46,13 @@ function _revert(uint256 errorCode, bytes3 prefix) pure {
         // array).
         let formattedPrefix := shl(24, add(0x23, shl(8, prefixUint)))
 
-        let revertReason := shl(200, add(formattedPrefix, add(add(units, shl(8, tenths)), shl(16, hundreds))))
+        let revertReason := shl(
+            200,
+            add(
+                formattedPrefix,
+                add(add(units, shl(8, tenths)), shl(16, hundreds))
+            )
+        )
 
         // We can now encode the reason in memory, which can be safely overwritten as we're about to revert. The encoded
         // message will have the following layout:
@@ -70,9 +60,15 @@ function _revert(uint256 errorCode, bytes3 prefix) pure {
 
         // The Solidity revert reason identifier is 0x08c739a0, the function selector of the Error(string) function. We
         // also write zeroes to the next 28 bytes of memory, but those are about to be overwritten.
-        mstore(0x0, 0x08c379a000000000000000000000000000000000000000000000000000000000)
+        mstore(
+            0x0,
+            0x08c379a000000000000000000000000000000000000000000000000000000000
+        )
         // Next is the offset to the location of the string, which will be placed immediately after (20 bytes away).
-        mstore(0x04, 0x0000000000000000000000000000000000000000000000000000000000000020)
+        mstore(
+            0x04,
+            0x0000000000000000000000000000000000000000000000000000000000000020
+        )
         // The string length is fixed: 7 characters.
         mstore(0x24, 7)
         // Finally, the string itself is stored.
@@ -88,7 +84,7 @@ function _revert(uint256 errorCode, bytes3 prefix) pure {
 library Errs {
     // Math
     // Input
-    // Pools
+
     // Lib
     // Deployment related
     uint256 internal constant ORACLE_NOT_WHITELISTED = 500;
@@ -106,4 +102,31 @@ library Errs {
 
     uint256 internal constant LP_USER_BALANCE_VIOLATION = 512;
     uint256 internal constant TOKEN_BALANCE_VIOLATION = 513;
+    uint256 internal constant SENDER_NOT_VAULT = 514;
+
+    // FXPool Related
+    uint256 internal constant FP_TOKEN_ZERO_ADDRESS = 515;
+    uint256 internal constant FP_ASSIMILATOR_ZERO_ADDRESS = 516;
+    uint256 internal constant FP_WEIGHT_MUST_BE_LESS_THAN_ONE = 517;
+    uint256 internal constant FP_INVALID_ALPHA = 518;
+    uint256 internal constant FP_INVALID_BETA = 519;
+    uint256 internal constant FP_INVALID_MAX = 520;
+    uint256 internal constant FP_INVALID_EPSILON = 521;
+    uint256 internal constant FP_INVALID_LAMBDA = 522;
+    uint256 internal constant FP_PARAMETERS_INCREASE_FEE = 523; // @todo test
+    uint256 internal constant FP_AMOUNT_BEYOND_SET_CAP = 524; // @todo test, cap setter not enabled
+    uint256 internal constant FP_INVALID_KAPPA = 525;
+    uint256 internal constant BASE_ASSIM_MISMATCH = 526;
+
+    // CurveMath
+    uint256 internal constant FP_SWAP_INVARIANT_VIOLATION = 527; // @todo test
+    uint256 internal constant FP_SWAP_CONVERGENCE_VIOLATION = 528;
+    uint256 internal constant FP_CURVE_LIQUIDITY_VIOLATION = 529; // @todo test
+    uint256 internal constant FP_UPPER_HALT = 530;
+    uint256 internal constant FP_LOWER_HALT = 531;
+
+    uint256 internal constant FP_INVALID_ASSET = 532;
+    uint256 internal constant FP_CAP_IS_NOT_GREATER_THAN_TOTAL_LIQUIDITY = 533;
+    uint256 internal constant FP_QUOTE_TOKEN_NOT_IN_POOL = 534;
+    uint256 internal constant FP_ORACLE_PRICE_ZERO = 535;
 }

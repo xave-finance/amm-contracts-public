@@ -3,12 +3,24 @@ pragma solidity ^0.8.24;
 
 import {IAggregatorPricingOnly} from "../interfaces/IAggregatorPricingOnly.sol";
 
-contract GenericUsdOracle is IAggregatorPricingOnly {
+contract StaticPriceOracle is IAggregatorPricingOnly {
+    int256 public price;
+    // used by external contracts
+    uint8 public decimals;
+    // used by external contracts
+    string public description;
+
     event AnswerUpdated(
         int256 indexed current,
         uint256 indexed roundId,
         uint256 updatedAt
     );
+
+    constructor(int256 _price, uint8 _decimals, string memory _description) {
+        price = _price;
+        decimals = _decimals;
+        description = _description;
+    }
 
     function aggregator() external view returns (address) {
         return address(this);
@@ -30,17 +42,17 @@ contract GenericUsdOracle is IAggregatorPricingOnly {
         startedAt = block.timestamp;
         updatedAt = block.timestamp;
         answeredInRound = 1;
-        answer = 1e8;
+        answer = price;
     }
 
-    function latestAnswer() external pure override returns (int256) {
-        return 1e8;
+    function latestAnswer() external view override returns (int256) {
+        return price;
     }
 
     function getAnswer(
         uint256 
-    ) external pure override returns (int256) {
-        return 1e8;
+    ) external view override returns (int256) {
+        return price;
     }
 
     // IAggregatorPricingOnly
@@ -62,7 +74,7 @@ contract GenericUsdOracle is IAggregatorPricingOnly {
         startedAt = block.timestamp;
         updatedAt = block.timestamp;
         answeredInRound = 1;
-        answer = 1e8;
+        answer = price;
     }
 
     function proposedGetRoundData(
@@ -83,7 +95,7 @@ contract GenericUsdOracle is IAggregatorPricingOnly {
         startedAt = block.timestamp;
         updatedAt = block.timestamp;
         answeredInRound = 1;
-        answer = 1e8;
+        answer = price;
     }
 
     function proposedLatestRoundData()
@@ -102,10 +114,10 @@ contract GenericUsdOracle is IAggregatorPricingOnly {
         startedAt = block.timestamp;
         updatedAt = block.timestamp;
         answeredInRound = 1;
-        answer = 1e8;
+        answer = price;
     }
 
     function updateAnswer() external {
-        emit AnswerUpdated(1e8, 1, block.timestamp);
+        emit AnswerUpdated(price, 1, block.timestamp);
     }
 }

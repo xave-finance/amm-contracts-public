@@ -1,23 +1,36 @@
 ```
-
-   _  __                    ___    __  _____  ___   _    _____
-  | |/ /___ __   _____     /   |  /  |/  /  |/  /  | |  / /__ \
-  |   / __ `/ | / / _ \   / /| | / /|_/ / /|_/ /   | | / /__/ /
- /   / /_/ /| |/ /  __/  / ___ |/ /  / / /  / /    | |/ // __/
-/_/|_\__,_/ |___/\___/  /_/  |_/_/  /_/_/  /_/     |___//____/
-
-
+██╗  ██╗ █████╗ ██╗   ██╗███████╗     █████╗ ███╗   ███╗███╗   ███╗    ██╗   ██╗██████╗
+╚██╗██╔╝██╔══██╗██║   ██║██╔════╝    ██╔══██╗████╗ ████║████╗ ████║    ██║   ██║╚════██╗
+ ╚███╔╝ ███████║██║   ██║█████╗      ███████║██╔████╔██║██╔████╔██║    ██║   ██║ █████╔╝
+ ██╔██╗ ██╔══██║╚██╗ ██╔╝██╔══╝      ██╔══██║██║╚██╔╝██║██║╚██╔╝██║    ╚██╗ ██╔╝ ╚═══██╗
+██╔╝ ██╗██║  ██║ ╚████╔╝ ███████╗    ██║  ██║██║ ╚═╝ ██║██║ ╚═╝ ██║     ╚████╔╝ ██████╔╝
+╚═╝  ╚═╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝    ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝     ╚═╝      ╚═══╝  ╚═════╝
 ```
 
 ## Description
 
-This repository contains the smart contracts source code and markets configuration for Xave Finance AMM V2. The repository uses Hardhat as development enviroment for compilation, testing and deployment tasks.
+This repository contains the smart contracts source code and markets configuration for Xave AMM V3. The repository uses Foundry as the development environment for compilation, testing and deployment tasks.
 
 ## Quick Start
 
-- `yarn` to install all dependencies
-- `yarn compile` to compile all the smart contracts
+```sh
+# install forge libraries and dependencies
+forge install
+forge test
+```
 
-## Environment Variables
+Running code coverage reports:
 
-Refer to our [env example](./.env.example) file in project root.
+```sh
+forge coverage
+
+# or you can output an LCOV format report that can
+# be read by VSCode plugins like "Coverage Gutters"
+forge coverage --report lcov
+
+# if you want to generate html based on the code coverage do the following:
+forge coverage --report lcov && genhtml lcov.info --output-dir coverage --branch-coverage && open coverage/index.html
+
+# if you don't have genhtml, on osx you can do this:
+brew install lcov
+```

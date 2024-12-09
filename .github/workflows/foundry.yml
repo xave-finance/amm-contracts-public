@@ -1,0 +1,48 @@
+name: Foundry
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+  pull_request:
+    branches:
+      - master
+      - develop
+
+jobs:
+  check:
+    name: FXPool Forge tests
+    runs-on: ubuntu-latest
+    environment: CI
+
+    strategy:
+      matrix:
+        node-version: [14.x]
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v2
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Install dependencies
+        run: yarn install
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Generate a unique random number
+        id: random-number-generator
+        run: echo "RANDOM_NUMBER=$(($RANDOM*1000))" >> $GITHUB_ENV
+      - name: Run tests
+        # see https://github.com/marketplace/actions/foundry-toolchain#fuzzing
+        run: |
+          echo "FOUNDRY_FUZZ_SEED=${{ env.RANDOM_NUMBER }}"
+          FOUNDRY_PROFILE=ci FOUNDRY_FUZZ_SEED=${{ env.RANDOM_NUMBER }} FOUNDRY_FUZZ_RUNS=5120 MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }} POLYGON_RPC_URL=${{ secrets.POLYGON_RPC_URL }} forge test -vvv
+
+      - name: Run coverage
+        run: |
+          echo "FOUNDRY_FUZZ_SEED=${{ env.RANDOM_NUMBER }}"
+          FOUNDRY_PROFILE=ci FOUNDRY_FUZZ_SEED=${{ env.RANDOM_NUMBER }} FOUNDRY_FUZZ_RUNS=5120 MAINNET_RPC_URL=${{ secrets.MAINNET_RPC_URL }} forge coverage

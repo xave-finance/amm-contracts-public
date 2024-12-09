@@ -1,4 +1,4 @@
-pragma solidity 0.7.6;
+pragma solidity ^0.8.24;
 
 interface IERC20Detailed {
     function decimals() external view returns (uint8);

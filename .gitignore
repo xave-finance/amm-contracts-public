@@ -367,3 +367,8 @@ scoping
 # Forge
 forge-artifacts/
 forge-cache/
+.aider*
+out/
+
+# Certora
+.certora_internal/
